@@ -46,9 +46,19 @@ jobs:
         run: |
           ./build.sh --device ${{ matrix.device }}
 
+      # Also emit header variants of the same kernel payload. Some bootloaders reject
+      # an image on the `fastboot boot` path ("BootImage is Incomplete") while accepting
+      # the identical bytes via `fastboot flash`; these isolate the header fields so the
+      # offending one can be identified by bisection rather than by rebuilding each time.
+      - name: Build boot header test variants
+        run: |
+          python3 Tools/remux-boot-image.py boot-${{ matrix.device }}.img -o variants
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: boot-${{ matrix.device }}
-          path: boot-${{ matrix.device }}.img
+          path: |
+            boot-${{ matrix.device }}.img
+            variants/*.img
           if-no-files-found: error

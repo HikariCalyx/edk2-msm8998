@@ -29,6 +29,8 @@ import sys
 
 FDT_MAGIC_BYTES = struct.pack(">I", 0xD00DFEED)
 QCDT_MAGIC_BYTES = b"QCDT"
+# Qualcomm dt_table_header (newer format than QCDT); fields are little-endian.
+DT_TABLE_MAGIC_BYTES = struct.pack("<I", 0xD7B7AB1E)
 BOOT_MAGIC = b"ANDROID!"
 
 
@@ -113,6 +115,46 @@ def find_qcdt(data):
         pos += 4
 
 
+def find_dt_tables(data):
+    """Parse Qualcomm dt_table headers.
+
+    This is the newer format: a header of little-endian u32s followed by
+    dt_entry records, each carrying (platform_id, variant_id, soc_rev, offset,
+    size, id). It is how stock images pack dozens of per-variant DTBs into one
+    boot image, and it is not the same thing as the older QCDT magic.
+    """
+    tables = []
+    pos = 0
+    while True:
+        pos = data.find(DT_TABLE_MAGIC_BYTES, pos)
+        if pos < 0:
+            return tables
+        if pos + 32 <= len(data):
+            (magic, total_size, header_size, entry_size,
+             entry_count, entries_offset, page_size, version) = struct.unpack_from("<8I", data, pos)
+            plausible = (32 <= header_size <= 4096
+                         and 12 <= entry_size <= 64
+                         and 0 < entry_count < 8192
+                         and entries_offset + entry_count * entry_size <= len(data))
+            if plausible:
+                tables.append({
+                    "offset": pos, "total_size": total_size, "header_size": header_size,
+                    "entry_size": entry_size, "entry_count": entry_count,
+                    "entries_offset": entries_offset, "page_size": page_size,
+                    "version": version, "data": data,
+                })
+        pos += 4
+
+
+def dt_table_entries(table):
+    """Yield decoded dt_entry records for a parsed dt_table."""
+    data = table["data"]
+    for i in range(table["entry_count"]):
+        off = table["entries_offset"] + i * table["entry_size"]
+        platform_id, variant_id, soc_rev, dtb_offset, dtb_size, dtb_id = struct.unpack_from("<6I", data, off)
+        yield platform_id, variant_id, soc_rev, dtb_offset, dtb_size, dtb_id
+
+
 def context_hint(data, offset):
     """Best-effort readable hint about which tree this is (root model, etc.)."""
     blob = data[offset:offset + 6144]
@@ -140,9 +182,31 @@ def main():
     parse_boot_header(data)
 
     qcdt = find_qcdt(data)
-    print("\n== QCDT tables ==")
+    print("\n== QCDT tables (legacy magic) ==")
     print("  none" if not qcdt else "  %d found, first @%#x"
           % (len(qcdt), qcdt[0]))
+
+    tables = find_dt_tables(data)
+    print("\n== Qualcomm dt_table headers ==")
+    if not tables:
+        print("  none - image carries bare appended DTB(s) instead")
+    for table in tables:
+        print("  @%#010x total_size=%d header_size=%d entry_size=%d entries=%d "
+              "entries_offset=%d page_size=%d version=%d"
+              % (table["offset"], table["total_size"], table["header_size"],
+                 table["entry_size"], table["entry_count"], table["entries_offset"],
+                 table["page_size"], table["version"]))
+        valid = 0
+        for entry in dt_table_entries(table):
+            platform_id, variant_id, soc_rev, dtb_offset, dtb_size, dtb_id = entry
+            ok = (dtb_offset + dtb_size <= len(data)
+                  and data[dtb_offset:dtb_offset + 4] == FDT_MAGIC_BYTES)
+            valid += 1 if ok else 0
+            print("    platform_id=%-5d variant_id=%-4d soc_rev=%#-9x offset=%#-10x "
+                  "size=%-7d id=%d %s"
+                  % (platform_id, variant_id, soc_rev, dtb_offset, dtb_size, dtb_id,
+                     "" if ok else "<-- not a valid FDT"))
+        print("    %d/%d entries point at valid FDTs" % (valid, table["entry_count"]))
 
     fdts = find_fdts(data)
     print("\n== FDT blobs ==")

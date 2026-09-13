@@ -8,6 +8,7 @@ library only - no `dtc`, no `pip install`, nothing to build.
 | `scan-boot-image.py` | Find and extract the DTBs packed inside a stock `boot` image |
 | `inspect-dtb.py` | Dump a `.dtb`'s memory map, carveouts, board IDs and panel |
 | `compare-dtb.py` | Property-level diff of DTBs, to pick the right one |
+| `remux-boot-image.py` | Re-mux a built image with alternative boot header values |
 
 ## Why these exist
 
@@ -75,6 +76,41 @@ behind a per-device `#define`, following the existing `LG_PIL_FIXED` pattern:
 `DscBuildData.py` appends options whose toolchain tag ends in `_FLAGS`, so this
 is safe and will not clobber the base `-march` flags from
 `Msm8998FamilyPkg.dsc.inc`.
+
+## Bisecting a `fastboot boot` rejection
+
+Some bootloaders refuse an image on the `fastboot boot` path with `BootImage is
+Incomplete` while accepting the identical bytes via `fastboot flash`. That refusal is
+about the *header*, and it is worth fixing: `fastboot boot` never writes to the device,
+so it is a far cheaper and safer iteration loop than flashing.
+
+`build.sh` never passes `--pagesize`, so every image inherits `mkbootimg.py`'s 2048
+default, and it uses `--base 0x10000000` with zero offsets for the kernel, ramdisk and
+tags. Stock images for these devices commonly differ on all of those.
+
+`remux-boot-image.py` keeps the kernel payload and varies only the header, emitting
+three cumulative variants:
+
+| Variant | Change | If accepted, that field was the problem |
+|---|---|---|
+| `page4096` | `page_size` 2048 → 4096 | page size |
+| `hdr0` | + `header_version` 0, stock `os_version` | header version / version check |
+| `stocklike` | + stock load addresses | load addresses |
+
+The os_version values in its table are the stock Nokia 8 (NB1) ones; pass
+`--os-version` / `--os-patch-level` for another device.
+
+```sh
+python3 Tools/remux-boot-image.py boot-nb1.img -o variants
+fastboot boot variants/boot-nb1-page4096.img
+```
+
+The CI workflow runs this automatically and ships the variants inside the same
+artifact, so a single download contains the normal image plus all three variants.
+
+Note that a RELEASE build is quiet by design - `Msm8998.dsc` sets `-DMDEPKG_NDEBUG`
+and an errors-only debug level - so getting *past* the header rejection is the win;
+expect a silent hang to remain until the payload itself is debugged with a DEBUG build.
 
 ## Example
 

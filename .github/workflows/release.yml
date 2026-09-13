@@ -8,37 +8,31 @@ on:
 jobs:
   build:
     name: build_release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write   # forks default to a read-only token; gh-release needs write
 
     strategy:
-      max-parallel: 8
+      fail-fast: false
       matrix:
         device:
-          - dumpling
-          - cheeseburger
-          - joan
-          - chiron
-          - sagit
-          - htc_ocmdtwl
-          - mata
-          - nx563j
           - nb1
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install requires packages
+      - name: Install required packages
         run: |
           sudo apt-get update
-          sudo apt-get -y install build-essential uuid-dev iasl nasm gcc-aarch64-linux-gnu abootimg python3-distutils python3-pil python3-git gettext
+          sudo apt-get -y install build-essential uuid-dev iasl nasm gcc-aarch64-linux-gnu python3-distutils python3-pil python3-git gettext
 
       - name: Build device ${{ matrix.device }}
         run: |
           ./build.sh --device ${{ matrix.device }}
           
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body: To be filled. 待填充
           files: boot-${{ matrix.device }}.img

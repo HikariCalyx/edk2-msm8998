@@ -10,6 +10,7 @@ DEVICES=(
     dumpling
     htc_ocmdtwl
 	nx563j
+	nb1
 )
 #####################################
 

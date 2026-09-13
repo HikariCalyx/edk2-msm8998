@@ -39,6 +39,15 @@ static ARM_MEMORY_REGION_DESCRIPTOR_EX gDeviceMemoryDescriptorEx[] = {
     {"Log Buffer",        0x9FFF7000, 0x00008000,  AddMem, SYS_MEM, SYS_MEM_CAP,  RtData, WRITE_BACK_XN},
     {"Info Blk",          0x9FFFF000, 0x00001000,  AddMem, SYS_MEM, SYS_MEM_CAP,  RtData, WRITE_BACK_XN},
 
+#ifdef NB1_FIXED
+    /* Nokia 8 (FIH NB1). The device DTB declares these as
+       compatible = "removed-dma-pool"; no-map; but they fall inside the
+       4/6/8GiB "RAM Partition" regions below, so the shared map would hand
+       them to UEFI as free RAM. */
+    {"FIH Region",        0xA0000000, 0x00B00000,  AddMem, SYS_MEM, SYS_MEM_CAP,  Reserv, NS_DEVICE},
+    {"Ramoops",           0xA0B00000, 0x00200000,  AddMem, SYS_MEM, SYS_MEM_CAP,  Reserv, NS_DEVICE},
+#endif
+
     /* 4GiB Memory */
     {"RAM Partition",     0xA0000000, 0xDE4C0000,  Mem4G , SYS_MEM, SYS_MEM_CAP,  Conv,   WRITE_BACK_XN},
     /* 6GiB Memory */
@@ -47,7 +56,12 @@ static ARM_MEMORY_REGION_DESCRIPTOR_EX gDeviceMemoryDescriptorEx[] = {
     {"RAM Partition",     0x100000000,0xBD8C0000,  Mem6G , SYS_MEM, SYS_MEM_CAP,  Conv,   WRITE_BACK_XN},
     /* 8GiB Memory */
     {"RAM Partition",     0xA0000000, 0xE0000000,  Mem8G , SYS_MEM, SYS_MEM_CAP,  Conv,   WRITE_BACK_XN},
+#ifdef NB1_FIXED
+    /* NB1's usable DRAM ends at 0x27CBC0000, per the device /memory node. */
+    {"RAM Partition",     0x180000000,0xFCBC0000,  Mem8G , SYS_MEM, SYS_MEM_CAP,  Conv,   WRITE_BACK_XN},
+#else
     {"RAM Partition",     0x180000000,0xFCCC0000,  Mem8G , SYS_MEM, SYS_MEM_CAP,  Conv,   WRITE_BACK_XN},
+#endif
 
     /* Other memory regions */
     {"IMEM Base",         0x14680000, 0x00040000,  NoHob,  MMAP_IO, INITIALIZED,  Conv,   NS_DEVICE},

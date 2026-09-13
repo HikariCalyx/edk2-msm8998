@@ -21,6 +21,7 @@
 | 小米 Mi Mix 2            | chiron                 | ✅            |
 | Essential Phone PH-1     | mata                   | ✅            |
 | HTC U11+                 | htc_ocmdtwl            | ❌            |
+| 诺基亚 8                 | nb1                    | ❌            |
 
 ## 支持的设备
 

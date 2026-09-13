@@ -24,6 +24,7 @@
 | Xiaomi Mi Mix 2          | chiron                 | ✅            |
 | Essential Phone PH-1     | mata                   | ✅            |
 | HTC U11+                 | htc_ocmdtwl            | ❌            |
+| Nokia 8                  | nb1                    | ❌            |
 
 ## Supported devices
 

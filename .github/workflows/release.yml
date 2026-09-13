@@ -22,6 +22,7 @@ jobs:
           - htc_ocmdtwl
           - mata
           - nx563j
+          - nb1
 
     steps:
       - name: Checkout repository

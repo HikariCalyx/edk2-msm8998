@@ -100,6 +100,18 @@ three cumulative variants:
 The os_version values in its table are the stock Nokia 8 (NB1) ones; pass
 `--os-version` / `--os-patch-level` for another device.
 
+It can also swap the appended device tree without rebuilding, which is the fastest way
+to test whether a particular DTB is the reason a payload hangs:
+
+```sh
+python3 Tools/remux-boot-image.py boot-nb1.img -o variants \
+    --dtb extracted/NB1-515K-boot-dtb40.dtb
+```
+
+Because `build.sh` always emits `gzip(firmware) + <device>.dtb`, the appended DTB is
+located by looking for the last FDT whose declared totalsize reaches the end of the
+payload, rather than assuming a fixed size.
+
 ```sh
 python3 Tools/remux-boot-image.py boot-nb1.img -o variants
 fastboot boot variants/boot-nb1-page4096.img

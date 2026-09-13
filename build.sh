@@ -82,7 +82,7 @@ function _build(){
 		--tags_offset 0x00000000 \
 		--os_version "${BOOTIMG_OS_VERSION}" \
 		--os_patch_level "${BOOTIMG_OS_PATCH_LEVEL}" \
-		--header_version 1 \
+		--header_version "${BOOTIMG_HEADER_VERSION:-1}" \
 		-o "${OUTDIR}/boot-${DEVICE}.img" \
 		||return "$?"
 	echo "Build done: ${OUTDIR}/boot-${DEVICE}.img"

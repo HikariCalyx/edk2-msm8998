@@ -80,6 +80,25 @@ def extract_kernel(path, dest):
     return payload, header
 
 
+def find_appended_dtb(payload):
+    """Return the offset of a DTB sitting at the very end of the payload, or None.
+
+    build.sh produces `gzip(firmware) + <device>.dtb`, so the appended DTB is the
+    last FDT whose declared totalsize reaches the end of the blob. Scanning for
+    that (rather than assuming a fixed size) keeps this correct for any device.
+    """
+    offset = None
+    pos = 0
+    while True:
+        pos = payload.find(b"\xd0\x0d\xfe\xed", pos)
+        if pos < 0:
+            return offset
+        total = struct.unpack_from(">I", payload, pos + 4)[0]
+        if pos + total == len(payload):
+            offset = pos
+        pos += 4
+
+
 def decode_os_version(value):
     version, patch = value >> 11, value & 0x7FF
     return ("%d.%d.%d" % ((version >> 14) & 0x7F, (version >> 7) & 0x7F,
@@ -130,6 +149,8 @@ def main():
                         help="override the variant os_version, e.g. 9.0.0")
     parser.add_argument("--os-patch-level", default=None,
                         help="override the variant os patch level, e.g. 2020-10")
+    parser.add_argument("--dtb", default=None,
+                        help="replace the DTB appended to the kernel payload")
     args = parser.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -148,7 +169,22 @@ def main():
     ramdisk = os.path.join(args.outdir, ".ramdisk")
     base = os.path.splitext(os.path.basename(args.image))[0]
 
-    _, header = extract_kernel(args.image, payload)
+    payload_bytes, header = extract_kernel(args.image, payload)
+
+    if args.dtb:
+        offset = find_appended_dtb(payload_bytes)
+        if offset is None:
+            raise SystemExit("no DTB appended at the end of the payload to replace")
+        with open(args.dtb, "rb") as handle:
+            replacement = handle.read()
+        if replacement[:4] != b"\xd0\x0d\xfe\xed":
+            raise SystemExit("%s does not look like a .dtb (bad magic)" % args.dtb)
+        print("swapping appended DTB: %d bytes -> %d bytes (%s)"
+              % (len(payload_bytes) - offset, len(replacement), args.dtb))
+        payload_bytes = payload_bytes[:offset] + replacement
+        with open(payload, "wb") as handle:
+            handle.write(payload_bytes)
+
     # build.sh creates this with `echo > ramdisk`, i.e. a single newline.
     with open(ramdisk, "wb") as handle:
         handle.write(b"\n")

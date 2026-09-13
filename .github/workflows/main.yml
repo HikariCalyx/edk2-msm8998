@@ -12,6 +12,16 @@ on:
   push:
     branches: [new]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Build mode
+        type: choice
+        options: [RELEASE, DEBUG]
+        default: RELEASE
+      skip_rootfs:
+        description: Skip SimpleInit rootfs generation (faster iteration)
+        type: boolean
+        default: false
 
 # a new push cancels an in-flight build for the same branch
 concurrency:
@@ -42,9 +52,14 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install build-essential uuid-dev iasl nasm gcc-aarch64-linux-gnu python3-distutils python3-pil python3-git gettext
 
-      - name: Build device ${{ matrix.device }}
+      - name: Build device ${{ matrix.device }} (${{ inputs.mode || 'RELEASE' }})
+        env:
+          BUILD_MODE: ${{ inputs.mode || 'RELEASE' }}
+          SKIP_ROOTFS: ${{ inputs.skip_rootfs }}
         run: |
-          ./build.sh --device ${{ matrix.device }}
+          EXTRA=""
+          if [ "${SKIP_ROOTFS}" = "true" ]; then EXTRA="--skip-rootfs-gen"; fi
+          ./build.sh --device ${{ matrix.device }} -r "${BUILD_MODE}" ${EXTRA}
 
       # Also emit header variants of the same kernel payload. Some bootloaders reject
       # an image on the `fastboot boot` path ("BootImage is Incomplete") while accepting
@@ -57,7 +72,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: boot-${{ matrix.device }}
+          name: boot-${{ matrix.device }}-${{ inputs.mode || 'RELEASE' }}
           path: |
             boot-${{ matrix.device }}.img
             variants/*.img
